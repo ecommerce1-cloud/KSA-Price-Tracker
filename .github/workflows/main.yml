@@ -1,0 +1,29 @@
+name: Daily_KSA_Tracker
+
+on:
+  schedule:
+    - cron: '0 7 * * *' # 10:00 AM Riyadh Time (UTC+3)
+  workflow_dispatch:
+
+jobs:
+  run-scraper:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install requests pandas beautifulsoup4
+      - name: Run Scraper
+        run: python tracker.py
+      - name: Save CSV
+        run: |
+          git config --local user.name "KSA-Bot"
+          git config --local user.email "actions@github.com"
+          git add ksa_master_report.csv
+          git commit -m "Daily Price Update" || exit 0
+          git push
