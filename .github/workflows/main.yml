@@ -5,9 +5,6 @@ on:
     - cron: '0 7 * * *' 
   workflow_dispatch:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true # Opting into the new standard early
-
 jobs:
   run-scraper:
     runs-on: ubuntu-latest
@@ -21,15 +18,10 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: |
-          pip install pandas playwright
-          # This line below is the most important for fixing Exit Code 1
-          playwright install --with-deps chromium 
+        run: pip install pandas requests beautifulsoup4
 
       - name: Run Scraper
         run: python tracker.py
-        env:
-          PYTHONUNBUFFERED: 1 # Ensures you see logs in real-time
 
       - name: Save CSV
         run: |
