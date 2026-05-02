@@ -5,7 +5,7 @@ from datetime import datetime
 import os
 import time
 
-API_KEY = 'PASTE_YOUR_KEY_HERE'
+API_KEY = '16c053b74712483dbe984acc98d8814f'
 
 def get_noon_price_direct(barcode):
     # Search URL - Noon often redirects this to the product page
