@@ -9,7 +9,6 @@ import time
 API_KEY = '16c053b74712483dbe984acc98d8814f'
 
 def get_platform_price(barcode, platform):
-    # Constructing search URLs for KSA platforms
     urls = {
         "noon": f"https://www.noon.com/saudi-en/search/?q={barcode}",
         "hungerstation": f"https://hungerstation.com/sa-en/search?q={barcode}",
@@ -18,22 +17,44 @@ def get_platform_price(barcode, platform):
     }
     
     target_url = urls.get(platform)
-    # Using ScraperAnt to bypass KSA firewalls and mimic local location
-    api_url = f"https://api.scraperant.com/v2/general?url={target_url}&x-api-key={API_KEY}&browser=true"
+    
+    # --- ENHANCED SCRAPING SETTINGS ---
+    # proxy_type=residential: Essential for KSA apps
+    # proxy_country=sa: Forces the IP to be inside Saudi Arabia
+    # browser=true: Necessary for Ninja/Keeta/HungerStation
+    api_url = (
+        f"https://api.scraperant.com/v2/general?"
+        f"url={target_url}&x-api-key={API_KEY}&browser=true"
+        f"&proxy_type=residential&proxy_country=sa"
+    )
     
     try:
-        response = requests.get(api_url, timeout=60)
+        # We increase the Python timeout to 120 seconds
+        response = requests.get(api_url, timeout=120)
+        
+        if response.status_code == 403:
+            return "Key Error/Limit"
+        if response.status_code != 200:
+            return f"Error {response.status_code}"
+
         soup = BeautifulSoup(response.content, "html.parser")
         
+        # Noon Logic
         if platform == "noon":
             price = soup.find("span", class_="amount")
             return price.text.strip() if price else "N/A"
-        else:
-            # Generic selector for delivery apps
-            price = soup.find(text=lambda t: "SAR" in t or "SR" in t)
-            return price.strip().replace('SAR', '').strip() if price else "N/A"
-    except:
-        return "Timeout"
+        
+        # General Price Search for delivery apps
+        # (Looking for numbers followed by SAR or SR)
+        price_tags = soup.find_all(text=lambda t: "SAR" in t or "SR" in t or "ريال" in t)
+        if price_tags:
+            return price_tags[0].strip().replace('SAR', '').replace('SR', '').strip()
+            
+        return "Not Found"
+    except requests.exceptions.Timeout:
+        return "Script Timeout"
+    except Exception:
+        return "Failed"
 
 # --- YOUR PRODUCT DATA ---
 input_data = [
