@@ -6,7 +6,7 @@ import os
 import time
 
 # --- CONFIGURATION ---
-API_KEY = 'PASTE_YOUR_SCRAPERANT_KEY_HERE'
+API_KEY = '16c053b74712483dbe984acc98d8814f'
 
 def get_platform_price(barcode, platform):
     # Constructing search URLs for KSA platforms
