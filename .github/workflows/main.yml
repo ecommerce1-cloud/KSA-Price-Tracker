@@ -2,7 +2,7 @@ name: Daily_KSA_Tracker
 
 on:
   schedule:
-    - cron: '0 7 * * *' # 10:00 AM Riyadh Time (UTC+3)
+    - cron: '0 7 * * *' 
   workflow_dispatch:
 
 jobs:
@@ -17,7 +17,9 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install dependencies
-        run: pip install requests pandas beautifulsoup4
+        run: |
+          pip install pandas playwright playwright-stealth
+          playwright install chromium
       - name: Run Scraper
         run: python tracker.py
       - name: Save CSV
