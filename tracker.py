@@ -1,64 +1,70 @@
 import pandas as pd
-import requests
-from bs4 import BeautifulSoup
+from playwright.sync_api import sync_playwright
+from playwright_stealth import stealth_sync
 from datetime import datetime
 import os
 import time
-import random
 
 API_KEY = '16c053b74712483dbe984acc98d8814f'
 
-def get_noon_price(barcode):
-    url = f"https://www.noon.com/saudi-en/search/?q={barcode}"
-    api_url = f"https://api.scraperant.com/v2/general?url={url}&x-api-key={API_KEY}&browser=true"
-    try:
-        res = requests.get(api_url, timeout=60)
-        soup = BeautifulSoup(res.content, "html.parser")
-        price = soup.find("span", class_="amount")
-        return price.text.strip() if price else "N/A"
-    except:
-        return "Error"
+def get_price_stealth(browser, barcode, platform):
+    urls = {
+        "noon": f"https://www.noon.com/saudi-en/search/?q={barcode}",
+        "hungerstation": f"https://hungerstation.com/sa-en/search?q={barcode}",
+        "ninja": f"https://aswaqninja.com/search?q={barcode}",
+        "keeta": f"https://www.keeta.com/sa/search?q={barcode}"
+    }
+    
+    # We use ScraperAnt as a PROXY within Playwright
+    # This gives us a Real Saudi Residential IP
+    proxy = {
+        "server": "http://api.scraperant.com:8080",
+        "username": API_KEY,
+        "password": ""
+    }
 
-def get_delivery_app_price(barcode, platform):
-    # Instead of the app, we ask Google: "What is the price of [barcode] on [platform]?"
-    # This is much harder for them to block.
-    search_query = f"site:{platform}.com {barcode} price SAR"
-    url = f"https://www.google.com/search?q={search_query}"
-    api_url = f"https://api.scraperant.com/v2/general?url={url}&x-api-key={API_KEY}&browser=true"
+    page = browser.new_page(proxy=proxy)
+    stealth_sync(page) # Hides the 'Bot' fingerprint
     
     try:
-        res = requests.get(api_url, timeout=60)
-        soup = BeautifulSoup(res.content, "html.parser")
-        # Look for SAR/SR in the search snippets
-        snippet = soup.find(text=lambda t: "SAR" in t or "SR" in t)
-        if snippet:
-            return snippet.strip()
-        return "Check App"
+        page.goto(urls[platform], wait_until="networkidle", timeout=60000)
+        time.sleep(5) # Let dynamic prices load
+        
+        if platform == "noon":
+            price_element = page.query_selector(".amount")
+            return price_element.inner_text() if price_element else "N/A"
+        
+        # Logic for Hungerstation/Ninja/Keeta
+        # We look for SAR text on the page
+        content = page.content()
+        if "SAR" in content or "SR" in content:
+            # Simple logic to find price numbers near SAR
+            return "Found" # You can refine this to pull exact text
+        return "Not Found"
     except:
         return "Blocked"
+    finally:
+        page.close()
 
-# --- TEST WITH FIRST 3 ITEMS ---
-input_data = [
-    {"code": "PPMP500TP1", "barcode": "05056141850689"},
-    {"code": "PPAF200HPX2", "barcode": "5056141850764"},
-    {"code": "PPGBR80110X3PKT", "barcode": "5056141850788"}
-]
+# --- RUNNING FOR 1 TEST ITEM ---
+def run():
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        
+        test_item = {"code": "PPMP500TP1", "barcode": "05056141850689"}
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+        
+        print(f"Testing {test_item['code']}...")
+        result = {
+            "Date": timestamp,
+            "Product Code": test_item['code'],
+            "Noon": get_price_stealth(browser, test_item['barcode'], "noon"),
+            "Hungerstation": get_price_stealth(browser, test_item['barcode'], "hungerstation")
+        }
+        
+        print(result)
+        pd.DataFrame([result]).to_csv("ksa_master_report.csv", index=False)
+        browser.close()
 
-results = []
-timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-
-for item in input_data:
-    print(f"Tracking {item['code']}...")
-    results.append({
-        "Date": timestamp,
-        "Product Code": item['code'],
-        "Barcode": item['barcode'],
-        "Noon RSP": get_noon_price(item['barcode']),
-        "Ninja RSP": get_delivery_app_price(item['barcode'], "aswaqninja"),
-        "Keeta RSP": get_delivery_app_price(item['barcode'], "keeta"),
-        "Hungerstation RSP": get_delivery_app_price(item['barcode'], "hungerstation")
-    })
-    time.sleep(10)
-
-df = pd.DataFrame(results)
-df.to_csv("ksa_master_report.csv", mode='a', index=False, header=not os.path.exists("ksa_master_report.csv"))
+if __name__ == "__main__":
+    run()
